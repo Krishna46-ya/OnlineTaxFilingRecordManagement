@@ -4,10 +4,12 @@ import z from 'zod';
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import cookieParser from "cookie-parser";
+import { authMiddleware } from './middleware.js';
 
 const app = express()
 app.use(express.json())
 app.use(cookieParser())
+app.use("/api", authMiddleware)
 
 app.get('/', (req, res) => {
     res.send({
@@ -38,7 +40,7 @@ export const UserSchema = z.object({
         .regex(/[^A-Za-z0-9]/, "Must include a special character")
 });
 
-app.post('/signup', async (req, res) => {
+app.post('/auth/signup', async (req, res) => {
     const user = UserSchema.safeParse(req.body)
 
     if (!user.success) {
@@ -89,7 +91,7 @@ const loginUserSchema = z.object({
 
 })
 
-app.post("/signin", async (req, res) => {
+app.post("/auth/signin", async (req, res) => {
     const user = loginUserSchema.safeParse(req.body)
     if (!user.success) {
         return res.status(400).json({
