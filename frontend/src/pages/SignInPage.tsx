@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence, Variants } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const NAVY    = "#1B3A6B";

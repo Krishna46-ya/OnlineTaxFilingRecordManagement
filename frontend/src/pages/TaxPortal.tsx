@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { redirect, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const NAVY = "#1B3A6B";
 const SAFFRON = "#FF7B00";
@@ -61,7 +61,6 @@ const stats = [
 
 export default function TaxPortal() {
   const [navScrolled, setNavScrolled] = useState(false);
-  const [mobileMenu, setMobileMenu] = useState(false);
   const navigate = useNavigate()
 
   useEffect(() => {
