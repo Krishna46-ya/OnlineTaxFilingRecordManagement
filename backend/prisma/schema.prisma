@@ -23,6 +23,7 @@ model User {
 
   createdAt DateTime @default(now())
   profileId String?
+  taxRecords TaxRecord[]
 }
 
 model Profile {
@@ -35,4 +36,35 @@ model Profile {
   address String?
 
   user User @relation(fields: [userId], references: [id])
+}
+
+model TaxRecord {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+
+  financialYear    String
+
+  // Income fields
+  salaryIncome     Float
+  businessIncome   Float
+  capitalGains     Float
+  otherIncome      Float
+  totalIncome      Float
+
+  // Deduction fields
+  section80C       Float
+  section80D       Float
+  section80E       Float
+  otherDeductions  Float
+  totalDeductions  Float
+
+  // Tax fields
+  taxableIncome    Float
+  taxCalculated    Float
+  taxPaid          Float
+
+  status           String   // "VALID" or "ERROR"
+
+  createdAt        DateTime @default(now())
 }

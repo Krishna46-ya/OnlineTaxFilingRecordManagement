@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence, type Variants } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const NAVY    = "#1B3A6B";
@@ -185,7 +185,7 @@ const FIELDS: FieldConfig[] = [
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function SignIn() {
+export default function SignInPage() {
   const navigate = useNavigate();
 
   const [form,         setForm        ] = useState<FormData>(INITIAL_FORM);
@@ -254,7 +254,7 @@ export default function SignIn() {
     setGlobalError(null);
 
     try {
-      const res = await fetch("http://localhost:3000/auth/signin", {
+      const res = await fetch("/auth/signin", {
         method:      "POST",
         headers:     { "Content-Type": "application/json" },
         credentials: "include",               // send / receive cookies
@@ -648,4 +648,3 @@ export default function SignIn() {
     </div>
   );
 }
-
