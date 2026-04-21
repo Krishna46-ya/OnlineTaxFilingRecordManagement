@@ -3,7 +3,7 @@ import './App.css'
 import  Signup  from './pages/signup'
 import  Signin  from './pages/signin'
 import TaxPortal from './pages/TaxPortal'
-import DashBoard from './pages/dashboard'
+import Dashboard from './pages/dashboard'
 
 function App() {
 
@@ -14,7 +14,7 @@ function App() {
                 <Route element={<Signup></Signup>} path='/signup'></Route>
                 <Route element={<Signin></Signin>} path='/signin'></Route>
                 <Route element={<TaxPortal></TaxPortal>} path='/'></Route>
-                <Route element={<DashBoard></DashBoard>} path='/dashboard'></Route>
+                <Route element={<Dashboard></Dashboard>} path='/dashboard'></Route>
             </Routes>
             </BrowserRouter>
         </>

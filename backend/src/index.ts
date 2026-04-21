@@ -25,6 +25,18 @@ app.get('/', (req, res) => {
     });
 })
 
+app.get("/me", authMiddleware, (req: authRequest, res: Response) => {
+    if (!req.user) {
+        return res.status(401).json({
+            msg: "Unauthorized"
+        });
+    }
+
+    return res.status(200).json({
+        user: req.user
+    });
+});
+
 export const UserSchema = z.object({
     name: z.string()
         .min(3, "Name must be at least 3 characters")
@@ -480,9 +492,9 @@ router.get("/records", authMiddleware, async (req: authRequest, res: Response) =
 router.get("/records/:id", authMiddleware, async (req: authRequest, res: Response) => {
     const { id } = req.params;
 
-    if (!id || typeof id !== "string") {
+    if (typeof id !== "string") {
         return res.status(400).json({
-            msg: "Record ID is required and must be a string",
+            msg: "Invalid record id",
         });
     }
 
@@ -509,5 +521,7 @@ router.get("/records/:id", authMiddleware, async (req: authRequest, res: Respons
         return res.status(500).json({ msg: "Internal server error" });
     }
 });
+
+
 
 app.listen(3000);
