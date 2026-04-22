@@ -10,6 +10,7 @@ import { type Response, Router } from "express";
 import { type authRequest } from './lib/types.js';
 
 
+const router = Router();
 const app = express()
 app.use(cors({
     origin: "http://localhost:5173", // your frontend URL
@@ -18,6 +19,7 @@ app.use(cors({
 app.use(express.json())
 app.use(cookieParser())
 app.use("/api", authMiddleware)
+app.use("/tax",router)
 
 app.get('/', (req, res) => {
     res.send({
@@ -154,7 +156,6 @@ app.post("/auth/signin", async (req, res) => {
     })
 })
 
-const router = Router();
 
 const taxFilingSchema = z.object({
     financialYear: z
