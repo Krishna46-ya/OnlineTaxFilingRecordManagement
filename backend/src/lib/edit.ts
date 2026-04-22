@@ -1,163 +1,13 @@
-import express from 'express';
-import { prisma } from './lib/prisma.js';
-import z from 'zod';
-import bcrypt from 'bcrypt'
-import jwt from 'jsonwebtoken'
-import cookieParser from "cookie-parser";
-import { authMiddleware } from './middleware.js';
-import cors from "cors"
 import { type Response, Router } from "express";
-import { type authRequest } from './lib/types.js';
-import routerTax from './lib/edit.js';
-
-const router = Router();
-const app = express()
-app.use(cors({
-    origin: "http://localhost:5173", // your frontend URL
-    credentials: true
-}))
-app.use(express.json())
-app.use(cookieParser())
-app.use("/api", authMiddleware)
-app.use("/tax",router)
-app.use('/tax',routerTax)
-
-app.get('/', (req, res) => {
-    res.send({
-        msg: "healthy"
-    });
-})
-
-app.get("/me", authMiddleware, (req: authRequest, res: Response) => {
-    if (!req.user) {
-        return res.status(401).json({
-            msg: "Unauthorized"
-        });
-    }
-
-    return res.status(200).json({
-        user: req.user
-    });
-});
-
-export const UserSchema = z.object({
-    name: z.string()
-        .min(3, "Name must be at least 3 characters")
-        .max(50)
-        .regex(/^[a-zA-Z\s]+$/, "Name should contain only letters"),
-
-    panId: z.string()
-        .length(10, "PAN must be 10 characters")
-        .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format"),
-
-    email: z.email("Invalid email format"),
-
-    DOB: z.string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/, "DOB must be YYYY-MM-DD"),
-
-    password: z.string()
-        .min(8, "Password must be at least 8 characters")
-        .regex(/[A-Z]/, "Must include uppercase letter")
-        .regex(/[a-z]/, "Must include lowercase letter")
-        .regex(/[0-9]/, "Must include a number")
-        .regex(/[^A-Za-z0-9]/, "Must include a special character")
-});
-
-app.post('/auth/signup', async (req, res) => {
-    const user = UserSchema.safeParse(req.body)
-
-    if (!user.success) {
-        return res.status(400).json({
-            errors: user.error.issues
-        });
-    }
-
-    const existingUser = await prisma.user.findFirst({
-        where: {
-            OR: [
-                { email: user.data.email },
-                { panId: user.data.panId.toUpperCase() }
-            ]
-        }
-    })
-
-    if (existingUser) {
-        return res.send({ msg: "user with pan or email already exist login instead" })
-    }
-
-    const passwordHash = await bcrypt.hash(user.data.password, 10);
-    await prisma.user.create({
-        data: {
-            name: user.data.name,
-            panId: user.data.panId.toUpperCase(),
-            email: user.data.email,
-            DOB: new Date(user.data.DOB),
-            passwordHash
-        }
-    })
-
-    return res.send({ msg: "user created successfully" })
-
-})
-
-const loginUserSchema = z.object({
-    panId: z.string()
-        .length(10, "PAN must be 10 characters")
-        .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format"),
-
-    password: z.string()
-        .min(8, "Password must be at least 8 characters")
-        .regex(/[A-Z]/, "Must include uppercase letter")
-        .regex(/[a-z]/, "Must include lowercase letter")
-        .regex(/[0-9]/, "Must include a number")
-        .regex(/[^A-Za-z0-9]/, "Must include a special character")
-
-})
-
-app.post("/auth/signin", async (req, res) => {
-    const user = loginUserSchema.safeParse(req.body)
-    if (!user.success) {
-        return res.status(400).json({
-            errors: user.error.issues
-        });
-    }
-
-    const existingUser = await prisma.user.findFirst({
-        where: {
-            panId: user.data.panId.toUpperCase()
-        }
-    })
-
-    if (!existingUser) {
-        return res.status(400).send({
-            msg: "account with panId doesnt exist"
-        })
-    }
-
-    const verify = await bcrypt.compare(user.data.password, existingUser.passwordHash)
-    if (!verify) {
-        return res.status(400).send({
-            msg: "incorrect passoword"
-        })
-    }
-
-    const token = jwt.sign({
-        userId: existingUser.id,
-        email: existingUser.email
-    }, process.env.JWT_SECRET!, { expiresIn: "30m" })
-
-    res.cookie("token", token, {
-        httpOnly: true,
-        secure: false,
-        maxAge: 30 * 60 * 1000
-    })
-
-    return res.send({
-        msg: "login successful"
-    })
-})
-
-
+import { z } from "zod";
+import { PrismaClient } from "@prisma/client";
+import { authMiddleware } from "../middleware.js";
+import { type authRequest } from "./types.js";
+export const routerTax = Router();
+import { prisma } from './prisma.js';
+// ─────────────────────────────────────────────────────────────────────────────
+// Zod schema
+// ─────────────────────────────────────────────────────────────────────────────
 const taxFilingSchema = z.object({
     financialYear: z
         .string()
@@ -167,8 +17,8 @@ const taxFilingSchema = z.object({
     businessIncome: z.coerce.number().min(0, "Business income cannot be negative"),
     capitalGains: z.coerce.number().min(0, "Capital gains cannot be negative"),
     otherIncome: z.coerce.number().min(0, "Other income cannot be negative"),
-
     section80C: z.number().min(0).max(150_000, "Section 80C cannot exceed ₹1,50,000"),
+
     section80D: z.number().min(0).max(100_000, "Section 80D cannot exceed ₹1,00,000"),
     section80E: z.number().min(0, "Section 80E cannot be negative"),
     otherDeductions: z.number().min(0, "Other deductions cannot be negative"),
@@ -284,7 +134,7 @@ function computeTax(input: TaxFilingInput): TaxBreakdown {
 // ─────────────────────────────────────────────────────────────────────────────
 // Route  POST /tax/file
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/file", authMiddleware, async (req: authRequest, res: Response) => {
+routerTax.post("/file", authMiddleware, async (req: authRequest, res: Response) => {
 
     // 1 ── Zod validation ──────────────────────────────────────────────────────
     const parsed = taxFilingSchema.safeParse(req.body);
@@ -304,21 +154,8 @@ router.post("/file", authMiddleware, async (req: authRequest, res: Response) => 
             msg: "Invalid financial year format. Use YYYY-YYYY (e.g. 2023-2024)",
         });
     }
-
     const fromYear = Number(parts[0]);
     const toYear = Number(parts[1]);
-
-    if (isNaN(fromYear) || isNaN(toYear)) {
-        return res.status(400).json({
-            msg: "Financial year must contain valid numbers (e.g. 2023-2024)",
-        });
-    }
-
-    if (toYear - fromYear !== 1) {
-        return res.status(400).json({
-            msg: "Financial year must span exactly one year (e.g. 2023-2024)",
-        });
-    }
 
     const currentYear = new Date().getFullYear();
     if (fromYear > currentYear) {
@@ -453,7 +290,7 @@ router.post("/file", authMiddleware, async (req: authRequest, res: Response) => 
 // ─────────────────────────────────────────────────────────────────────────────
 // Route  GET /tax/records   — list all filings for the logged-in user
 // ─────────────────────────────────────────────────────────────────────────────
-router.get("/records", authMiddleware, async (req: authRequest, res: Response) => {
+routerTax.get("/records", authMiddleware, async (req: authRequest, res: Response) => {
     try {
         const records = await prisma.taxRecord.findMany({
             where: { userId: req.user!.userId },
@@ -491,9 +328,8 @@ router.get("/records", authMiddleware, async (req: authRequest, res: Response) =
 // ─────────────────────────────────────────────────────────────────────────────
 // Route  GET /tax/records/:id   — single record detail
 // ─────────────────────────────────────────────────────────────────────────────
-router.get("/records/:id", authMiddleware, async (req: authRequest, res: Response) => {
+routerTax.get("/records/:id", authMiddleware, async (req: authRequest, res: Response) => {
     const { id } = req.params;
-
     if (typeof id !== "string") {
         return res.status(400).json({
             msg: "Invalid record id",
@@ -524,16 +360,133 @@ router.get("/records/:id", authMiddleware, async (req: authRequest, res: Respons
     }
 });
 
-app.post("/auth/signout", (req, res)=> {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure:   false,   // set true in production (HTTPS)
-    sameSite: "lax",
-    path:     "/",
-  });
- 
-  return res.status(200).json({ msg: "Signed out successfully" });
+// ─────────────────────────────────────────────────────────────────────────────
+// Route  PATCH /tax/records/:id   — amend a filed return
+//
+//  - financialYear is intentionally NOT in the edit schema (cannot be changed)
+//  - All other income / deduction / taxPaid fields are fully editable
+//  - Tax is fully recalculated from scratch on every amendment
+// ─────────────────────────────────────────────────────────────────────────────
+const taxEditSchema = taxFilingSchema.omit({ financialYear: true });
+
+routerTax.patch("/records/:id", authMiddleware, async (req: authRequest, res: Response) => {
+    const { id } = req.params;
+    if (typeof id !== "string") {
+        return res.status(400).json({
+            msg: "Invalid record id",
+        });
+    }
+
+    // 1 ── Zod validation ──────────────────────────────────────────────────────
+    const parsed = taxEditSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ errors: parsed.error.issues });
+    }
+
+    const data = parsed.data;
+    const userId = req.user!.userId;
+
+    try {
+        // 2 ── Find the record (ownership check included) ──────────────────────
+        const existing = await prisma.taxRecord.findFirst({
+            where: { id, userId },
+        });
+
+        if (!existing) {
+            return res.status(404).json({ msg: "Tax record not found" });
+        }
+
+        // 3 ── Recompute tax with new figures ──────────────────────────────────
+        //      Pass financialYear from the original record so computeTax stays consistent
+        const calc = computeTax({ ...data, financialYear: existing.financialYear });
+
+        // 4 ── Persist updated record ──────────────────────────────────────────
+        const updated = await prisma.taxRecord.update({
+            where: { id },
+            data: {
+                salaryIncome: data.salaryIncome,
+                businessIncome: data.businessIncome,
+                capitalGains: data.capitalGains,
+                otherIncome: data.otherIncome,
+                totalIncome: calc.totalIncome,
+
+                section80C: calc.section80CApplied,
+                section80D: calc.section80DApplied,
+                section80E: calc.section80EApplied,
+                otherDeductions: calc.otherDeductionsApplied,
+                totalDeductions: calc.totalDeductions,
+
+                taxableIncome: calc.taxableIncome,
+                taxCalculated: calc.taxCalculated,
+                taxPaid: data.taxPaid,
+
+                status: "VALID",
+            },
+        });
+
+        // 5 ── Build response summary ──────────────────────────────────────────
+        const balance = r2(calc.taxCalculated - data.taxPaid);
+        const isRefund = balance < 0;
+        const isDue = balance > 0;
+        const absBalance = Math.abs(balance);
+
+        const taxStatus = isRefund
+            ? { code: "REFUND", msg: `Eligible for a refund of ₹${absBalance.toLocaleString("en-IN")}` }
+            : isDue
+                ? { code: "DUE", msg: `Tax due of ₹${absBalance.toLocaleString("en-IN")} must be paid` }
+                : { code: "SETTLED", msg: "Tax fully paid — no amount due or refundable" };
+
+        return res.json({
+            msg: "Tax record amended successfully",
+
+            record: {
+                id: updated.id,
+                financialYear: updated.financialYear,
+                status: updated.status,
+                amendedAt: new Date().toISOString(),
+            },
+
+            summary: {
+                income: {
+                    salaryIncome: data.salaryIncome,
+                    businessIncome: data.businessIncome,
+                    capitalGains: data.capitalGains,
+                    otherIncome: data.otherIncome,
+                    totalIncome: calc.totalIncome,
+                },
+
+                deductions: {
+                    standardDeduction: calc.standardDeductionApplied,
+                    section80C: calc.section80CApplied,
+                    section80D: calc.section80DApplied,
+                    section80E: calc.section80EApplied,
+                    otherDeductions: calc.otherDeductionsApplied,
+                    totalDeductions: calc.totalDeductions,
+
+                    capped: {
+                        section80C: data.section80C > MAX_80C,
+                        section80D: data.section80D > MAX_80D_GENERAL,
+                    },
+                },
+
+                tax: {
+                    taxableIncome: calc.taxableIncome,
+                    baseTax: calc.baseTax,
+                    rebateU87A: calc.rebate87A,
+                    surcharge: calc.surcharge,
+                    cess: calc.cess,
+                    taxCalculated: calc.taxCalculated,
+                    taxPaid: data.taxPaid,
+                    balance,
+                    taxStatus,
+                },
+            },
+        });
+
+    } catch (err) {
+        console.error("[PATCH tax/records/:id] error:", err);
+        return res.status(500).json({ msg: "Internal server error. Please try again later." });
+    }
 });
 
-
-app.listen(3000);
+export default routerTax;
